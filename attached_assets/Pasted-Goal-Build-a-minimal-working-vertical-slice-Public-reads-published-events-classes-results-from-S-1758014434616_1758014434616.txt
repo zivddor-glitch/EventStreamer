@@ -1,0 +1,167 @@
+Goal: Build a minimal, working vertical slice:
+
+Public reads published events/classes/results from Supabase.
+
+Admin can sign in (magic link) and Publish/Unpublish an event (flip events.status).
+
+No parsing/upload yet—just wiring and pages.
+
+Stack
+
+Next.js (App Router) + TypeScript
+
+Tailwind (RTL support enabled)
+
+@supabase/supabase-js + @supabase/ssr or @supabase/auth-helpers-nextjs (your choice)
+
+Minimal components, no UI kit required
+
+ENV (create in Replit Secrets)
+
+NEXT_PUBLIC_SUPABASE_URL = <from Supabase>
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY = <from Supabase>
+
+SUPABASE_SERVICE_ROLE_KEY = <from Supabase, server only>
+
+Project structure (create files)
+/app
+  /layout.tsx
+  /page.tsx                      // Home: list published events
+  /event/[id]/page.tsx           // Event page: classes + results
+  /admin/page.tsx                // Admin dashboard (requires auth)
+  /admin/sign-in/page.tsx        // Magic-link sign-in page
+  /api/admin/publish/route.ts    // POST {eventId, status}: publish/unpublish (server only)
+
+ /lib
+   /supabaseBrowser.ts           // anon client (browser)
+   /supabaseServer.ts            // server client (reads auth cookies)
+   /supabaseAdmin.ts             // service-role client (server only)
+   /auth.ts                      // helpers: getCurrentUser(), isAdmin()
+
+ /components
+   EventCard.tsx
+   ResultsTable.tsx
+   AdminGuard.tsx                // wraps pages; redirects if not admin
+
+ /styles
+   globals.css (Tailwind + RTL)
+
+Supabase clients
+
+Browser (anon): uses NEXT_PUBLIC_* keys; read-only queries for public pages.
+
+Server (auth-aware): use auth-helpers/SSR to read the signed-in user from cookies.
+
+Admin (service role): only inside server routes (/api/...), never shipped to client.
+
+Pages & behaviors
+1) Home /
+
+Query Supabase (anon): events where status = 'published' ordered by event_date desc.
+
+Render simple cards (name, date) linking to /event/[id].
+
+2) Event page /event/[id]
+
+Load event by id (anon).
+
+Query classes for that event_id.
+
+Query results for that event_id joined with pairs -> riders/horses (two-step or select+expand).
+
+Render a basic table: Class | Rider | Horse | Final % | Eligible.
+
+3) Admin sign-in /admin/sign-in
+
+Magic-link flow using Supabase Auth.
+
+On success, redirect to /admin.
+
+4) Admin dashboard /admin
+
+Guarded by AdminGuard:
+
+getCurrentUser() → query user_profiles by user_id. If role='admin', allow, else redirect to /admin/sign-in.
+
+Show a table of all events (name, date, status).
+
+For each row, show a Publish (if draft) / Unpublish (if published) button.
+
+Clicking calls POST /api/admin/publish with { eventId, status: 'published' | 'draft' }.
+
+After success, refresh the list (client re-fetch or router.refresh()).
+
+5) API route /api/admin/publish (server)
+
+Verify caller is an authenticated admin (read user from cookies; check user_profiles.role).
+
+Use service role client (SUPABASE_SERVICE_ROLE_KEY) to update events set status=... where id=....
+
+Return 200 on success; 401 if unauthenticated; 403 if not admin.
+
+Auth notes
+
+Enable email magic links in Supabase (already done).
+
+Use @supabase/auth-helpers-nextjs (or @supabase/ssr) so:
+
+Client can sign in.
+
+Server components/route handlers can read the user/session from cookies.
+
+Tailwind / RTL
+
+Add Tailwind.
+
+In globals.css, set direction: rtl; for html temporarily (we’ll add a language toggle later).
+
+Keep simple CSS; focus on function.
+
+Data queries (minimal)
+
+Home: from('events').select('id, name, event_date').eq('status','published').order('event_date', { ascending: false })
+
+Event page:
+
+select('id,name,event_date') from events where id=... (auto-protected by RLS)
+
+select('id,name,level') from classes where event_id=...
+
+select('id,class_id,pair_id,final_score_pct,eligible') from results where event_id=...
+
+Then fetch riders/horses via:
+
+pairs by pair_id → join to riders and horses in separate queries; or
+
+If helpers allow, use RPC/view later. For MVP, 2–3 queries are fine.
+
+Admin guard logic
+
+getCurrentUser() reads Supabase auth on server.
+
+Query user_profiles where user_id = currentUser.id.
+
+If no row or role != 'admin' → redirect to /admin/sign-in.
+
+DON’Ts
+
+Never expose SUPABASE_SERVICE_ROLE_KEY to the browser.
+
+Don’t disable RLS.
+
+Don’t build upload/parse yet; this is just the publishable read path.
+
+Acceptance checks (must pass)
+
+When the database has a published event (“Ein Harod Open”), Home lists it and links to its event page.
+
+Event page shows at least one class and its results rows (names can be placeholders if joins are deferred).
+
+Visiting /admin while signed out redirects to /admin/sign-in.
+
+After signing in (magic link), /admin loads and shows all events with their statuses.
+
+Clicking Publish/Unpublish calls /api/admin/publish and the UI updates without manual refresh.
+
+After Unpublish, the event disappears from the Home page (RLS confirmed).
