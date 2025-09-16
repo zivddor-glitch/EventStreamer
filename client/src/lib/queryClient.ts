@@ -8,15 +8,27 @@ async function throwIfResNotOk(res: Response) {
 }
 
 export async function apiRequest(
-  method: string,
   url: string,
-  data?: unknown | undefined,
+  options: RequestInit = {}
 ): Promise<Response> {
+  const headers: Record<string, string> = {
+    ...options.headers as Record<string, string>
+  };
+
+  // Add Content-Type for POST/PUT/PATCH requests
+  if (options.method && ['POST', 'PUT', 'PATCH'].includes(options.method)) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  // Add admin token for admin endpoints
+  if (url.includes('/admin/')) {
+    headers["x-admin-token"] = "admin123";
+  }
+
   const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
+    ...options,
+    headers,
   });
 
   await throwIfResNotOk(res);
@@ -29,8 +41,17 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = queryKey.join("/") as string;
+    const headers: Record<string, string> = {};
+
+    // Add admin token for admin endpoints
+    if (url.includes('/admin/')) {
+      headers["x-admin-token"] = "admin123";
+    }
+
+    const res = await fetch(url, {
       credentials: "include",
+      headers,
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
