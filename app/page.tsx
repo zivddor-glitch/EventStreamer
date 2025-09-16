@@ -2,7 +2,10 @@ import { createClient } from '@/lib/supabaseServer';
 import EventCard from '@/components/EventCard';
 import type { Event } from '@shared/schema';
 
-async function getPublishedEvents(): Promise<Event[]> {
+// Type for the actual data we fetch (without updated_at)
+type PublishedEvent = Pick<Event, 'id' | 'name' | 'event_date' | 'status' | 'created_at'>;
+
+async function getPublishedEvents(): Promise<PublishedEvent[]> {
   const supabase = await createClient();
   
   const { data: events, error } = await supabase

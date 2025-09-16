@@ -7,7 +7,7 @@ interface EventDetailPageProps {
 }
 
 async function getEvent(id: string): Promise<Event | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const { data: event, error } = await supabase
     .from('events')
@@ -24,7 +24,7 @@ async function getEvent(id: string): Promise<Event | null> {
 }
 
 async function getEventResults(eventId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const { data: results, error } = await supabase
     .from('results')
@@ -32,18 +32,18 @@ async function getEventResults(eventId: string) {
       id,
       final_score_pct,
       eligible,
-      classes (
+      classes:class_id (
         id,
         name,
         level
       ),
-      pairs (
+      pairs:pair_id (
         id,
-        riders (
+        riders:rider_id (
           id,
           name
         ),
-        horses (
+        horses:horse_id (
           id,
           name
         )
@@ -60,8 +60,9 @@ async function getEventResults(eventId: string) {
 }
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
-  const event = await getEvent(params.id);
-  const results = await getEventResults(params.id);
+  const { id } = await params;
+  const event = await getEvent(id);
+  const results = await getEventResults(id);
 
   if (!event) {
     return (

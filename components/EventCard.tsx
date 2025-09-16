@@ -2,7 +2,7 @@ import type { Event } from '@shared/schema';
 import Link from 'next/link';
 
 interface EventCardProps {
-  event: Event;
+  event: Pick<Event, 'id' | 'name' | 'event_date'>;
 }
 
 export default function EventCard({ event }: EventCardProps) {
