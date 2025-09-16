@@ -1,38 +1,52 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type Event, type InsertEvent } from "@shared/schema";
+import { neon } from "@neondatabase/serverless";
 
-// modify the interface with any CRUD methods
-// you might need
+// PostgreSQL client using the DATABASE_URL
+const sql = neon(process.env.DATABASE_URL!);
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getPublishedEvents(): Promise<Event[]>;
+  getAllEvents(): Promise<Event[]>;
+  getEventById(id: string): Promise<Event | undefined>;
+  updateEventStatus(id: string, status: string): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class PostgresStorage implements IStorage {
+  async getPublishedEvents(): Promise<Event[]> {
+    const events = await sql`
+      SELECT id, name, event_date, status, created_at, updated_at 
+      FROM events 
+      WHERE status = 'published' 
+      ORDER BY event_date DESC
+    `;
+    return events as Event[];
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getAllEvents(): Promise<Event[]> {
+    const events = await sql`
+      SELECT id, name, event_date, status, created_at, updated_at 
+      FROM events 
+      ORDER BY event_date DESC
+    `;
+    return events as Event[];
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getEventById(id: string): Promise<Event | undefined> {
+    const events = await sql`
+      SELECT id, name, event_date, status, created_at, updated_at 
+      FROM events 
+      WHERE id = ${id}
+    `;
+    return events[0] as Event | undefined;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async updateEventStatus(id: string, status: string): Promise<void> {
+    await sql`
+      UPDATE events 
+      SET status = ${status}, updated_at = now() 
+      WHERE id = ${id}
+    `;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new PostgresStorage();

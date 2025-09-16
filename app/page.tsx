@@ -3,11 +3,11 @@ import EventCard from '@/components/EventCard';
 import type { Event } from '@shared/schema';
 
 async function getPublishedEvents(): Promise<Event[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const { data: events, error } = await supabase
     .from('events')
-    .select('id, name, event_date, status')
+    .select('id, name, event_date, status, created_at, updated_at')
     .eq('status', 'published')
     .order('event_date', { ascending: false });
     

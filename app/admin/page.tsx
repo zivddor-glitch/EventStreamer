@@ -5,11 +5,11 @@ import AdminDashboard from '@/components/AdminDashboard';
 import type { Event } from '@shared/schema';
 
 async function getAllEvents(): Promise<Event[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   const { data: events, error } = await supabase
     .from('events')
-    .select('id, name, event_date, status')
+    .select('id, name, event_date, status, created_at, updated_at')
     .order('event_date', { ascending: false });
     
   if (error) {
