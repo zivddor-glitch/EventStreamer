@@ -1,89 +1,54 @@
-import express, { type Request, Response, NextFunction } from "express";
-import session from "express-session";
-import MemoryStore from "memorystore";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { spawn } from 'child_process';
 
-const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+console.log('Starting Next.js development server...');
 
-// Session configuration
-const MemStore = MemoryStore(session);
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'dev-secret-change-in-prod',
-  resave: false,
-  saveUninitialized: false,
-  store: new MemStore({
-    checkPeriod: 86400000 // prune expired entries every 24h
-  }),
-  cookie: {
-    secure: false, // set to true in production with HTTPS
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
+// Ensure all Supabase environment variables are available
+const requiredEnvVars = {
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  PORT: process.env.PORT || '5000'
+};
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
+console.log('Environment variables check:');
+Object.entries(requiredEnvVars).forEach(([key, value]) => {
+  console.log(`${key}: ${value ? 'Set' : 'NOT SET'}`);
 });
 
-(async () => {
-  const server = await registerRoutes(app);
-
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-
-    res.status(status).json({ message });
-    throw err;
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+// Spawn Next.js as a child process with explicit environment variables
+const nextProcess = spawn('npx', ['next', 'dev', '-p', '5000', '-H', '0.0.0.0'], {
+  stdio: 'inherit',
+  shell: true,
+  env: {
+    ...process.env,
+    ...requiredEnvVars
   }
+});
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
-})();
+// Handle process events
+nextProcess.on('error', (error) => {
+  console.error('Failed to start Next.js:', error);
+  process.exit(1);
+});
+
+nextProcess.on('exit', (code, signal) => {
+  if (code !== null) {
+    console.log(`Next.js process exited with code ${code}`);
+  } else if (signal !== null) {
+    console.log(`Next.js process killed with signal ${signal}`);
+  }
+  process.exit(code || 0);
+});
+
+// Keep the parent process alive
+process.on('SIGINT', () => {
+  console.log('Shutting down Next.js...');
+  nextProcess.kill('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  console.log('Shutting down Next.js...');
+  nextProcess.kill('SIGTERM');
+});
+
+console.log('Next.js wrapper started successfully');
