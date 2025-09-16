@@ -1,14 +1,40 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useLocation } from 'wouter';
 import type { Event } from '@shared/schema';
 
 export default function AdminPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [, navigate] = useLocation();
+
+  // Check if user is authenticated as admin
+  const { data: authStatus, isLoading: authLoading, error: authError } = useQuery({
+    queryKey: ['/api/admin/me'],
+    retry: false,
+  });
 
   const { data: events = [], isLoading } = useQuery<Event[]>({
     queryKey: ['/api/admin/events'],
+    enabled: !!authStatus?.isAdmin, // Only fetch events if authenticated
   });
+
+  // Redirect to login if not authenticated
+  if (authError || (authStatus && !authStatus.isAdmin)) {
+    navigate('/admin/login');
+    return null;
+  }
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12">
+          <p className="text-muted-foreground text-lg">בודק הרשאות...</p>
+        </div>
+      </div>
+    );
+  }
 
   const publishMutation = useMutation({
     mutationFn: async ({ eventId, status }: { eventId: string; status: string }) => {

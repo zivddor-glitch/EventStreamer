@@ -2,18 +2,56 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 
-// Simple authentication middleware
+// Session-based authentication middleware  
 function requireAdmin(req: any, res: any, next: any) {
-  // For now, check for a simple admin token in headers
-  // In production, this would be a proper JWT or session system
-  const adminToken = req.headers['x-admin-token'];
-  if (adminToken !== 'admin123') {
-    return res.status(401).json({ message: "Unauthorized - Admin access required" });
+  // Check if user has valid admin session
+  if (!req.session?.isAdmin) {
+    return res.status(401).json({ message: "Unauthorized - Admin login required" });
   }
   next();
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Admin authentication endpoint
+  app.post("/api/admin/login", async (req, res) => {
+    const { password } = req.body;
+    
+    // Check against admin password from environment
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    
+    if (!adminPassword) {
+      console.error("ADMIN_PASSWORD environment variable not set");
+      return res.status(500).json({ message: "Server configuration error" });
+    }
+    
+    if (password !== adminPassword) {
+      return res.status(401).json({ message: "Invalid admin password" });
+    }
+
+    // Set admin session
+    req.session.isAdmin = true;
+    res.json({ message: "Login successful" });
+  });
+
+  // Check admin session status
+  app.get("/api/admin/me", async (req, res) => {
+    if (req.session?.isAdmin) {
+      res.json({ isAdmin: true });
+    } else {
+      res.status(401).json({ isAdmin: false });
+    }
+  });
+
+  // Admin logout
+  app.post("/api/admin/logout", async (req, res) => {
+    req.session.destroy((err: any) => {
+      if (err) {
+        return res.status(500).json({ message: "Logout failed" });
+      }
+      res.json({ message: "Logout successful" });
+    });
+  });
+
   // Public API - Get published events
   app.get("/api/events", async (req, res) => {
     try {

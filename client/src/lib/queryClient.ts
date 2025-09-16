@@ -20,10 +20,7 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  // Add admin token for admin endpoints
-  if (url.includes('/admin/')) {
-    headers["x-admin-token"] = "admin123";
-  }
+  // No automatic admin token - authentication is now session-based
 
   const res = await fetch(url, {
     credentials: "include",
@@ -44,10 +41,7 @@ export const getQueryFn: <T>(options: {
     const url = queryKey.join("/") as string;
     const headers: Record<string, string> = {};
 
-    // Add admin token for admin endpoints
-    if (url.includes('/admin/')) {
-      headers["x-admin-token"] = "admin123";
-    }
+    // No automatic admin token - authentication is now session-based
 
     const res = await fetch(url, {
       credentials: "include",
