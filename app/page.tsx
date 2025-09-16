@@ -7,7 +7,7 @@ async function getPublishedEvents(): Promise<Event[]> {
   
   const { data: events, error } = await supabase
     .from('events')
-    .select('id, name, event_date, status, created_at, updated_at')
+    .select('id, name, event_date, status, created_at')
     .eq('status', 'published')
     .order('event_date', { ascending: false });
     
